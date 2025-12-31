@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { Framework, Project, BackendType } from '../types';
 import { Button } from '../components/Button';
-import { Sparkles, Code, Database, Server, HardDrive } from 'lucide-react';
+import { Sparkles, Code, Database, Server, HardDrive, Settings } from 'lucide-react';
 import { generateApp } from '../services/geminiService';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 interface DashboardProps {
   onProjectCreated: (project: Project) => void;
+  apiKey: string;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }) => {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +22,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated }) => {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
+    if (!apiKey) {
+      setError("Gemini API Key is missing. Please add it in Settings.");
+      return;
+    }
     
     setIsGenerating(true);
     setError(null);
@@ -51,7 +56,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated }) => {
       }
 
       // 2. Generate App Code
-      const generatedData = await generateApp(prompt, Framework.HTML, backendConfig);
+      const generatedData = await generateApp(apiKey, prompt, Framework.HTML, backendConfig);
       
       const newProject: Project = {
         id: generateId(),
@@ -104,10 +109,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated }) => {
           </p>
         </div>
 
-        <div className="bg-surface/50 border border-border rounded-2xl p-2 backdrop-blur-sm shadow-2xl">
+        <div className="bg-surface/50 border border-border rounded-2xl p-2 backdrop-blur-sm shadow-2xl relative">
+          
+          {!apiKey && (
+             <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                <div className="bg-surface border border-border p-6 rounded-xl shadow-2xl max-w-md text-center space-y-4">
+                    <div className="mx-auto w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                        <Settings className="h-6 w-6 text-yellow-500" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-white">API Key Required</h3>
+                    <p className="text-zinc-400 text-sm">To start building apps, you need to provide your Gemini API Key.</p>
+                </div>
+             </div>
+          )}
+
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            disabled={!apiKey}
             placeholder="e.g., A minimalist task manager with drag-and-drop, dark mode, and categories..."
             className="w-full bg-transparent text-lg p-6 text-white placeholder:text-zinc-600 focus:outline-none resize-none min-h-[120px]"
           />
@@ -179,7 +198,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated }) => {
 
                 <Button 
                     onClick={handleGenerate} 
-                    disabled={!prompt.trim() || isGenerating}
+                    disabled={!prompt.trim() || isGenerating || !apiKey}
                     isLoading={isGenerating}
                     className="w-full md:w-auto px-8 py-2.5 rounded-xl text-base"
                 >
