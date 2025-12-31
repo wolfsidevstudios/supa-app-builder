@@ -6,6 +6,7 @@ import { DatabaseViewer } from '../components/DatabaseViewer';
 import { Button } from '../components/Button';
 import { DeployModal } from '../components/DeployModal';
 import { refineApp } from '../services/geminiService';
+import { pushToGitHubRepo } from '../services/githubService';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { 
@@ -15,11 +16,12 @@ import {
   FolderOpen, 
   FileCode,
   Send,
-  Download,
   Database,
   Copy,
   Check,
-  Rocket
+  Rocket,
+  GitCommit,
+  Github
 } from 'lucide-react';
 
 interface EditorProps {
@@ -103,6 +105,9 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
   const [isRefining, setIsRefining] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
+  
+  const [isPushing, setIsPushing] = useState(false);
+  const [pushSuccess, setPushSuccess] = useState(false);
 
   // Ensure selected file is valid if project updates
   useEffect(() => {
@@ -142,7 +147,9 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
             messages: [...updatedMessages, assistantMsg],
             genBaseConfig: project.genBaseConfig,
             backendType: project.backendType,
-            netlifySiteId: project.netlifySiteId // preserve site id
+            netlifySiteId: project.netlifySiteId,
+            githubOwner: project.githubOwner,
+            githubRepo: project.githubRepo
         };
 
         onUpdateProject(updatedProject);
@@ -152,6 +159,28 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
     } finally {
         setIsRefining(false);
     }
+  };
+
+  const handlePushChanges = async () => {
+      if (!project.githubOwner || !project.githubRepo) return;
+      const token = localStorage.getItem('github_pat');
+      if (!token) {
+          setIsDeployModalOpen(true);
+          return;
+      }
+
+      setIsPushing(true);
+      setPushSuccess(false);
+      try {
+          await pushToGitHubRepo(token, project.githubOwner, project.githubRepo, project.files, `Update from Editor: ${new Date().toLocaleString()}`);
+          setPushSuccess(true);
+          setTimeout(() => setPushSuccess(false), 3000);
+      } catch (e) {
+          console.error("Failed to push", e);
+          alert("Failed to push changes to GitHub. Please check your token or repo permissions.");
+      } finally {
+          setIsPushing(false);
+      }
   };
 
   const renderContent = () => {
@@ -300,14 +329,27 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
                         DB Active
                     </span>
                  )}
-                 <Button 
-                    onClick={() => setIsDeployModalOpen(true)}
-                    variant="secondary" 
-                    className="h-8 text-xs bg-[#00C7B7]/10 hover:bg-[#00C7B7]/20 text-[#00C7B7] border-[#00C7B7]/20"
-                    icon={<Rocket className="h-3 w-3"/>}
-                 >
-                    Deploy to Netlify
-                 </Button>
+
+                 {project.githubRepo ? (
+                    <Button 
+                        onClick={handlePushChanges}
+                        disabled={isPushing}
+                        variant="secondary"
+                        className={`h-8 text-xs border-white/10 ${pushSuccess ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10' : ''}`}
+                        icon={pushSuccess ? <Check className="h-3 w-3"/> : <GitCommit className="h-3 w-3"/>}
+                    >
+                        {isPushing ? 'Pushing...' : pushSuccess ? 'Committed!' : 'Save & Commit'}
+                    </Button>
+                 ) : (
+                    <Button 
+                        onClick={() => setIsDeployModalOpen(true)}
+                        variant="secondary" 
+                        className="h-8 text-xs bg-white text-black hover:bg-zinc-200 border-white/20 font-bold"
+                        icon={<Rocket className="h-3 w-3"/>}
+                    >
+                        Deploy App
+                    </Button>
+                 )}
             </div>
         </div>
 

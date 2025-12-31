@@ -10,9 +10,9 @@ const appSchema: Schema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          name: { type: Type.STRING, description: "File name with extension (e.g. index.html, script.js, style.css, db/schema.sql, netlify/edge-functions/hello.js)" },
+          name: { type: Type.STRING, description: "File name with extension (e.g. index.html, script.js, style.css, db/schema.sql, api/hello.js, package.json)" },
           content: { type: Type.STRING, description: "Full source code content of the file" },
-          language: { type: Type.STRING, description: "Language identifier (html, css, javascript, sql, toml)" }
+          language: { type: Type.STRING, description: "Language identifier (html, css, javascript, sql, json)" }
         },
         required: ["name", "content", "language"]
       }
@@ -64,24 +64,22 @@ export const generateApp = async (
        - IN PREVIEW HTML: You MUST inline this \`executeQuery\` function (without export) so the preview works.
        - DO NOT use localStorage.
 
-    3. **NETLIFY EDGE FUNCTIONS (Serverless)**:
-       - If the user asks for server-side logic (not database), use Edge Functions.
-       - Create file: 'netlify/edge-functions/<function_name>.js' (or .ts).
-       - Create file: 'netlify.toml' to configure the route.
-         \`\`\`toml
-         [[edge_functions]]
-           function = "<function_name>"
-           path = "/api/<route>"
-         \`\`\`
-       - Edge Function Syntax:
+    3. **NODE.JS BACKEND (Vercel Serverless Functions)**:
+       - If the user needs server-side logic (e.g., using AI APIs, secret keys, web scraping, complex calculations), use Node.js Serverless Functions.
+       - Create files in the 'api/' directory.
+       - **File Format**: 'api/<function_name>.js'.
+       - **Syntax** (Standard Node.js Request/Response):
          \`\`\`javascript
-         export default async (request, context) => {
-           return new Response("Hello world", {
-             headers: { "content-type": "text/html" },
-           });
-         };
+         export default async function handler(request, response) {
+           const { name } = request.query; // or request.body
+           // Perform server-side logic, call external APIs securely
+           return response.status(200).json({ message: \`Hello \${name}\` });
+         }
          \`\`\`
-       - IMPORTANT: The 'previewHtml' cannot run Edge Functions directly. Add a comment in the UI saying "Deploy to Netlify to test Edge Functions".
+       - **Dependencies**: If you use external packages (like 'openai', 'axios', 'cheerio'), you MUST generate a 'package.json' file in the root with these dependencies.
+       - **Environment Variables**: Assume keys (like OPENAI_API_KEY) are in process.env.
+       - **Preview Limitation**: The 'previewHtml' runs in the browser and CANNOT call '/api/*' routes because there is no running backend server.
+       - **CRITICAL PREVIEW INSTRUCTION**: In 'previewHtml', if the app logic tries to call '/api/xyz', you must MOCK the response or show a toast notification saying "Backend feature requires deployment". Do not let the app crash.
   `;
 
   const frameworkInstructions = `
@@ -90,7 +88,8 @@ export const generateApp = async (
       **FILES OUTPUT**:
       - index.html, script.js, style.css.
       - db/schema.sql (if tables are needed).
-      - netlify.toml (if edge functions are needed).
+      - api/<route>.js (if Node.js backend is needed).
+      - package.json (if Node.js dependencies are needed).
       
       **PREVIEW HTML OUTPUT**:
       - Standard HTML/JS.
@@ -106,14 +105,14 @@ export const generateApp = async (
     ${backendInstructions}
 
     Requirements:
-    1. Generate a file structure suitable for HTML/JS.
+    1. Generate a file structure suitable for HTML/JS + Node.js Backend (Vercel).
     2. Provide full source code for every file.
     3. Generate the ROBUST 'previewHtml' string with all scripts inlined or properly referenced via CDN.
        - The Preview HTML IS CRITICAL. It must work immediately without a build step.
     4. **Explanation**:
        - Provide a helpful message.
        - ALWAYS paste the 'db/schema.sql' content in a code block if you created tables.
-       - If you created Edge Functions, mention that they require deployment to run.
+       - If you created Backend APIs, mention that they require deployment to Vercel to function.
   `;
 
   try {

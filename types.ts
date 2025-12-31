@@ -41,6 +41,9 @@ export interface Project {
   backendType: BackendType;
   genBaseConfig?: GenBaseConfig;
   netlifySiteId?: string;
+  // GitHub Integration
+  githubRepo?: string;
+  githubOwner?: string;
 }
 
 export type ViewMode = 'code' | 'preview' | 'database';
