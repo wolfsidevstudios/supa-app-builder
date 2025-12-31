@@ -26,6 +26,7 @@ import {
 interface EditorProps {
   project: Project;
   onUpdateProject: (project: Project) => void;
+  apiKey: string;
 }
 
 // --- Helper Component for Rendering Chat Messages ---
@@ -97,7 +98,7 @@ const ChatMessageContent: React.FC<{ content: string }> = ({ content }) => {
   );
 };
 
-export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject }) => {
+export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(project.files.length > 0 ? project.files[0] : null);
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const [chatInput, setChatInput] = useState('');
@@ -157,7 +158,7 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject }) => {
     onUpdateProject({ ...project, messages: updatedMessages });
 
     try {
-        const refinedData = await refineApp(project, userMsg, project.framework);
+        const refinedData = await refineApp(apiKey, project, userMsg, project.framework);
         
         const assistantMsg = {
             id: Math.random().toString(),
