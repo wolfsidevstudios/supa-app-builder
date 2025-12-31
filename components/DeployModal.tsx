@@ -14,6 +14,7 @@ interface DeployModalProps {
 
 export const DeployModal: React.FC<DeployModalProps> = ({ isOpen, onClose, project, onUpdateProject }) => {
   const [token, setToken] = useState<string | null>(null);
+  const [manualTokenInput, setManualTokenInput] = useState('');
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployUrl, setDeployUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +29,22 @@ export const DeployModal: React.FC<DeployModalProps> = ({ isOpen, onClose, proje
 
   const handleConnect = () => {
     window.location.href = '/api/auth/netlify/authorize';
+  };
+
+  const handleSaveManualToken = () => {
+    if (manualTokenInput.trim()) {
+        const t = manualTokenInput.trim();
+        localStorage.setItem('netlify_access_token', t);
+        setToken(t);
+        setManualTokenInput('');
+    }
+  };
+
+  const handleDisconnect = () => {
+      localStorage.removeItem('netlify_access_token');
+      setToken(null);
+      setDeployUrl(null);
+      setError(null);
   };
 
   const handleDeploy = async () => {
@@ -109,16 +126,46 @@ export const DeployModal: React.FC<DeployModalProps> = ({ isOpen, onClose, proje
         <div className="p-6 space-y-6">
           
           {!token ? (
-            <div className="text-center space-y-4">
-              <div className="mx-auto w-12 h-12 bg-[#00C7B7]/10 rounded-full flex items-center justify-center">
-                 <Rocket className="h-6 w-6 text-[#00C7B7]" />
-              </div>
-              <p className="text-zinc-400 text-sm">
-                Connect your Netlify account to deploy your app and Edge Functions directly to the cloud.
-              </p>
-              <Button onClick={handleConnect} className="w-full bg-[#00C7B7] hover:bg-[#00b5a6] text-white border-none">
-                Connect Netlify
-              </Button>
+            <div className="space-y-6">
+                <div className="text-center space-y-4">
+                    <div className="mx-auto w-12 h-12 bg-[#00C7B7]/10 rounded-full flex items-center justify-center">
+                        <Rocket className="h-6 w-6 text-[#00C7B7]" />
+                    </div>
+                    <p className="text-zinc-400 text-sm">
+                        Connect your Netlify account to deploy your app.
+                    </p>
+                    <Button onClick={handleConnect} className="w-full bg-[#00C7B7] hover:bg-[#00b5a6] text-white border-none">
+                        Connect with Netlify
+                    </Button>
+                </div>
+
+                <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-white/10" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-surface px-2 text-zinc-500">Or use Access Token</span>
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    <label className="text-xs font-medium text-zinc-400">Personal Access Token</label>
+                    <div className="flex gap-2">
+                        <input 
+                            type="password" 
+                            value={manualTokenInput}
+                            onChange={(e) => setManualTokenInput(e.target.value)}
+                            placeholder="nfp_..."
+                            className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-zinc-700"
+                        />
+                        <Button variant="secondary" onClick={handleSaveManualToken} disabled={!manualTokenInput}>
+                            Save
+                        </Button>
+                    </div>
+                    <p className="text-[10px] text-zinc-600">
+                        Generate a token in Netlify User Settings &gt; Applications &gt; Personal Access Tokens.
+                    </p>
+                </div>
             </div>
           ) : (
              <div className="space-y-4">
@@ -138,14 +185,19 @@ export const DeployModal: React.FC<DeployModalProps> = ({ isOpen, onClose, proje
                  </div>
                ) : (
                  <>
-                   <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5">
-                      <div className="h-10 w-10 bg-[#00C7B7]/20 rounded-lg flex items-center justify-center text-[#00C7B7] font-bold">
-                        N
+                   <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
+                      <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 bg-[#00C7B7]/20 rounded-lg flex items-center justify-center text-[#00C7B7] font-bold">
+                            N
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-white">Netlify Account</div>
+                            <div className="text-xs text-zinc-500">Connected</div>
+                          </div>
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-white">Netlify Account</div>
-                        <div className="text-xs text-zinc-500">Connected</div>
-                      </div>
+                      <button onClick={handleDisconnect} className="text-xs text-red-400 hover:text-red-300 hover:underline">
+                          Disconnect
+                      </button>
                    </div>
                    
                    <p className="text-xs text-zinc-400">

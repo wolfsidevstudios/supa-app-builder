@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Code2, Settings, Github, Plus } from 'lucide-react';
+import { Code2, Settings, Github, Plus, LayoutGrid } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -28,6 +29,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNewProject, onGoHome
                 title="New Project"
              >
                 <Plus className="h-5 w-5 group-hover:scale-110 transition-transform" />
+             </button>
+
+             <button 
+                onClick={onGoHome}
+                className="w-full flex items-center justify-center p-3 rounded-lg text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                title="All Projects"
+             >
+                <LayoutGrid className="h-5 w-5" />
              </button>
           </nav>
         </div>
