@@ -1,5 +1,4 @@
 import { CONFIG } from './config';
-import { Buffer } from 'buffer';
 
 export default async function handler(req: any, res: any) {
   const { code } = req.query;
@@ -10,11 +9,15 @@ export default async function handler(req: any, res: any) {
   if (!code) return res.status(400).send('No code provided');
 
   try {
+    // Use btoa for Base64 encoding which is supported in modern Node.js and doesn't require @types/node
+    const authString = `${CONFIG.clientId}:${CONFIG.clientSecret}`;
+    const encodedAuth = btoa(authString);
+
     const response = await fetch(CONFIG.tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${Buffer.from(`${CONFIG.clientId}:${CONFIG.clientSecret}`).toString('base64')}`
+        'Authorization': `Basic ${encodedAuth}`
       },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
@@ -28,7 +31,6 @@ export default async function handler(req: any, res: any) {
     if (data.error) throw new Error(data.error_description || data.error);
 
     // Redirect back to the dashboard, passing the token in the URL fragment so it's accessible to the client app
-    // In a full production app, you might set a secure cookie here.
     res.redirect(`/?supabase_access_token=${data.access_token}&refresh_token=${data.refresh_token}`);
   } catch (error: any) {
     console.error('Supabase Auth Error:', error);

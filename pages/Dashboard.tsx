@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Framework, Project, BackendType } from '../types';
 import { Button } from '../components/Button';
-import { Sparkles, Code, Database, Server, HardDrive, Settings, Link, Check, RefreshCw, LogOut } from 'lucide-react';
+import { Sparkles, Code, Database, Server, HardDrive, Settings, Link, Check, RefreshCw, LogOut, Loader2 } from 'lucide-react';
 import { generateApp } from '../services/geminiService';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -20,6 +20,7 @@ interface SupabaseProject {
 export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }) => {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStep, setGenerationStep] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   
   // Backend State
@@ -119,6 +120,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
     setSupabaseKey('');
   };
 
+  const applySupabaseSchema = async (sql: string, projectRef: string, token: string) => {
+    try {
+        const res = await fetch(`/api/supabase/proxy?endpoint=/v1/projects/${projectRef}/query`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query: sql })
+        });
+        
+        if (!res.ok) {
+            const errData = await res.json();
+            console.error("Failed to apply schema:", errData);
+            return { success: false, error: errData.error || "Unknown error executing SQL" };
+        }
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     if (!apiKey) {
@@ -127,6 +150,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
     }
     
     setIsGenerating(true);
+    setGenerationStep('Designing application structure...');
     setError(null);
     
     try {
@@ -137,11 +161,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
          if (!supabaseUrl || !supabaseKey) throw new Error("Missing Supabase credentials. Connect your account or enter details manually.");
          backendConfig = { type: 'supabase', config: { url: supabaseUrl, key: supabaseKey } };
       } else if (backendType === 'genbase') {
+         setGenerationStep('Provisioning GenBase database...');
          // Call our API to provision a new project ID (and schema in real implementation)
          try {
             const res = await fetch('/api/provision', { method: 'POST' });
             if (!res.ok) {
-               // Fallback if API is not available (e.g. local dev without API running)
                console.warn("API provision failed, using fallback ID");
                backendConfig = { type: 'genbase', config: { projectId: `proj_${generateId()}` } };
             } else {
@@ -155,8 +179,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
       }
 
       // 2. Generate App Code
+      setGenerationStep('Generating code with Gemini...');
       const generatedData = await generateApp(apiKey, prompt, Framework.HTML, backendConfig);
       
+      let assistantMessage = generatedData.explanation || "I've generated the initial version of your app.";
+
+      // 3. Apply Schema if Supabase OAuth
+      if (backendType === 'supabase' && supabaseAccessToken && selectedProjectRef) {
+         const schemaFile = generatedData.files.find(f => f.name === 'db/schema.sql' || f.name === 'schema.sql');
+         if (schemaFile) {
+             setGenerationStep('Applying database schema to Supabase...');
+             const result = await applySupabaseSchema(schemaFile.content, selectedProjectRef, supabaseAccessToken);
+             if (result.success) {
+                 assistantMessage += "\n\n✅ Database tables created successfully in Supabase.";
+             } else {
+                 assistantMessage += `\n\n⚠️ Failed to create database tables automatically: ${result.error}. Please run the SQL in 'db/schema.sql' manually in your Supabase SQL Editor.`;
+             }
+         }
+      }
+
       const newProject: Project = {
         id: generateId(),
         name: prompt.slice(0, 20) + (prompt.length > 20 ? '...' : ''),
@@ -178,7 +219,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
             {
                 id: generateId(),
                 role: 'assistant',
-                content: generatedData.explanation || "I've generated the initial version of your app.",
+                content: assistantMessage,
                 timestamp: Date.now() + 1000
             }
         ]
@@ -189,6 +230,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
       setError(err.message || "Failed to generate app. Please try again.");
     } finally {
       setIsGenerating(false);
+      setGenerationStep('');
     }
   };
 
@@ -377,7 +419,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
                     isLoading={isGenerating}
                     className="w-full md:w-auto px-8 py-2.5 rounded-xl text-base"
                 >
-                    Generate App
+                    {isGenerating && generationStep ? generationStep : 'Generate App'}
                 </Button>
             </div>
           </div>
