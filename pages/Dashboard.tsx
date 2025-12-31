@@ -184,7 +184,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
       
       let assistantMessage = generatedData.explanation || "I've generated the initial version of your app.";
 
-      // 3. Apply Schema if Supabase OAuth
+      // 3. Apply Schema
+      // For Supabase
       if (backendType === 'supabase' && supabaseAccessToken && selectedProjectRef) {
          const schemaFile = generatedData.files.find(f => f.name === 'db/schema.sql' || f.name === 'schema.sql');
          if (schemaFile) {
@@ -194,6 +195,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
                  assistantMessage += "\n\n✅ Database tables created successfully in Supabase.";
              } else {
                  assistantMessage += `\n\n⚠️ Failed to create database tables automatically: ${result.error}. Please run the SQL in 'db/schema.sql' manually in your Supabase SQL Editor.`;
+             }
+         }
+      }
+      // For GenBase
+      else if (backendType === 'genbase' && backendConfig?.config?.projectId) {
+         const schemaFile = generatedData.files.find(f => f.name === 'db/schema.sql' || f.name === 'schema.sql');
+         if (schemaFile) {
+             setGenerationStep('Applying database schema to GenBase...');
+             try {
+                 const res = await fetch('/api/query', {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({
+                         projectId: backendConfig.config.projectId,
+                         sql: schemaFile.content
+                     })
+                 });
+                 if (!res.ok) {
+                   const errText = await res.text();
+                   throw new Error(errText);
+                 }
+                 assistantMessage += "\n\n✅ GenBase database tables created successfully.";
+             } catch (e: any) {
+                 console.error("GenBase Schema Error", e);
+                 assistantMessage += `\n\n⚠️ Failed to apply GenBase schema: ${e.message}`;
              }
          }
       }

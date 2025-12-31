@@ -147,12 +147,24 @@ export const refineApp = async (apiKey: string, currentProject: Project, userMes
      backendConfig = { type: 'genbase', config: currentProject.genBaseConfig };
    }
    
+   // Construct a context string containing all current files
+   const fileContext = currentProject.files.map(f => 
+      `### FILE: ${f.name} ###\n${f.content}\n### END FILE ${f.name} ###`
+   ).join('\n\n');
+
    const prompt = `
-     The current app has these files: ${currentProject.files.map(f => f.name).join(', ')}.
-     User wants to modify it: "${userMessage}".
-     Regenerate the project files and the preview HTML.
-     CRITICAL: Follow PREVIEW STABILITY RULES.
-     - Keep using Tailwind v4 and Vanilla JS.
+     Here is the current state of the application files:
+     
+     ${fileContext}
+
+     The user wants to make the following changes: "${userMessage}".
+     
+     INSTRUCTIONS:
+     1. Analyze the existing code and the user's request.
+     2. Refactor the code to implement the requested changes.
+     3. Return the COMPLETE content for modified files. You can include unchanged files if they help context, but prioritize the modified ones.
+     4. CRITICAL: Follow PREVIEW STABILITY RULES (No ESM imports, use global error handler).
+     5. Keep using Tailwind v4 and Vanilla JS.
      ${backendConfig ? `- MAINTAIN ${backendConfig.type.toUpperCase()} CONNECTION.` : ''}
    `;
    

@@ -227,25 +227,7 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
                   );
               }
               if (project.backendType === 'genbase' && project.genBaseConfig) {
-                  return (
-                      <div className="h-full w-full flex flex-col items-center justify-center text-zinc-500 bg-[#09090b] gap-4">
-                        <div className="p-4 bg-blue-500/10 rounded-full">
-                           <Server className="h-8 w-8 text-blue-400" />
-                        </div>
-                        <h3 className="text-xl font-medium text-white">GenBase Connected</h3>
-                        <p className="max-w-md text-center text-sm text-zinc-400">
-                            Managed Postgres Database (Neon.tech).
-                            <br/>
-                            Requests are proxied through '/api/query'.
-                        </p>
-                        <div className="flex flex-col gap-2 w-full max-w-sm">
-                             <div className="bg-surface border border-border p-3 rounded-lg flex items-center justify-between">
-                                 <span className="text-xs text-zinc-500">Project ID</span>
-                                 <span className="text-xs text-zinc-300 font-mono truncate max-w-[200px]">{project.genBaseConfig.projectId}</span>
-                             </div>
-                        </div>
-                      </div>
-                  );
+                  return <DatabaseViewer files={project.files} projectId={project.genBaseConfig.projectId} />;
               }
               return <DatabaseViewer files={project.files} />;
           default:
