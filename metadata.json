@@ -1,0 +1,5 @@
+{
+  "name": "Supa App Builder",
+  "description": "An AI-powered application builder that generates React and Vue applications with live previews.",
+  "requestFramePermissions": []
+}
