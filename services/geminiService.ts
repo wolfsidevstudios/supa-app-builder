@@ -1,9 +1,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Framework, GeneratedApp, SupabaseConfig, GenBaseConfig, Project } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
-
 const appSchema: Schema = {
   type: Type.OBJECT,
   properties: {
@@ -32,14 +29,16 @@ const appSchema: Schema = {
 };
 
 export const generateApp = async (
+  apiKey: string,
   prompt: string, 
   framework: Framework, 
   backendConfig?: { type: 'supabase', config: SupabaseConfig } | { type: 'genbase', config: GenBaseConfig }
 ): Promise<GeneratedApp> => {
   if (!apiKey) {
-    throw new Error("API Key is missing");
+    throw new Error("Gemini API Key is missing. Please add it in Settings.");
   }
-
+  
+  const ai = new GoogleGenAI({ apiKey });
   const modelName = 'gemini-3-flash-preview'; 
 
   let backendInstructions = '';
@@ -140,7 +139,7 @@ export const generateApp = async (
   }
 };
 
-export const refineApp = async (currentProject: Project, userMessage: string, framework: Framework): Promise<GeneratedApp> => {
+export const refineApp = async (apiKey: string, currentProject: Project, userMessage: string, framework: Framework): Promise<GeneratedApp> => {
    let backendConfig: any = undefined;
    if (currentProject.backendType === 'supabase' && currentProject.supabaseConfig) {
      backendConfig = { type: 'supabase', config: currentProject.supabaseConfig };
@@ -157,5 +156,5 @@ export const refineApp = async (currentProject: Project, userMessage: string, fr
      ${backendConfig ? `- MAINTAIN ${backendConfig.type.toUpperCase()} CONNECTION.` : ''}
    `;
    
-   return generateApp(prompt, Framework.HTML, backendConfig);
+   return generateApp(apiKey, prompt, Framework.HTML, backendConfig);
 }
