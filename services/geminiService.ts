@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { Framework, GeneratedApp, GenBaseConfig, Project } from "../types";
+import { Framework, GeneratedApp, GenBaseConfig, Project, AIModelConfig } from "../types";
 
 const appSchema: Schema = {
   type: Type.OBJECT,
@@ -29,19 +29,71 @@ const appSchema: Schema = {
   required: ["files", "previewHtml", "explanation"]
 };
 
+// Helper for delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- Custom/OpenAI Adapter ---
+async function generateWithCustom(config: AIModelConfig, systemPrompt: string, userPrompt: string, isJson: boolean): Promise<any> {
+  const baseUrl = config.baseUrl?.replace(/\/$/, '') || 'https://api.openai.com/v1';
+  const url = `${baseUrl}/chat/completions`;
+  
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  const body: any = {
+    model: config.modelId,
+    messages: messages,
+    temperature: 0.2,
+  };
+
+  if (isJson) {
+     body.response_format = { type: "json_object" };
+     // Append JSON instruction to system prompt for models that need explicit prompting
+     messages[0].content += "\n\nCRITICAL: RESPONSE MUST BE VALID JSON.";
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.apiKey}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Custom API Error (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error("No content received from custom model");
+
+  if (isJson) {
+    try {
+      return JSON.parse(content);
+    } catch (e) {
+      // Try to clean markdown code blocks
+      const clean = content.replace(/```json\n?|```/g, '').trim();
+      return JSON.parse(clean);
+    }
+  }
+  return { explanation: content }; // Mock structure for refinement if generic text
+}
+
+// --- Main Generation Function ---
 export const generateApp = async (
-  apiKey: string,
+  aiConfig: AIModelConfig,
   prompt: string, 
   framework: Framework = Framework.HTML, 
   backendConfig?: { type: 'genbase', config: GenBaseConfig }
 ): Promise<GeneratedApp> => {
-  if (!apiKey) {
-    throw new Error("Gemini API Key is missing. Please add it in Settings.");
+  if (!aiConfig.apiKey) {
+    throw new Error("API Key is missing. Please add it in Settings.");
   }
-  
-  const ai = new GoogleGenAI({ apiKey });
-  // Using a model capable of tools and high reasoning
-  const modelName = 'gemini-3-flash-preview'; 
 
   // Get the current origin to ensure deployed apps can still hit the main GenBase API
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://supa-app-builder.vercel.app';
@@ -120,39 +172,62 @@ export const generateApp = async (
        - If you created Backend APIs, mention that they require deployment to Vercel to function.
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: [
-        { role: 'user', parts: [{ text: systemPrompt }, { text: `User App Description: ${prompt}` }] }
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: appSchema,
-        temperature: 0.2,
-        // Enable Google Search for grounding to get real-time info if requested
-        tools: [{ googleSearch: {} }]
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      if (aiConfig.provider === 'custom') {
+         return await generateWithCustom(aiConfig, systemPrompt, `User App Description: ${prompt}`, true);
+      } else {
+         // Default Gemini Provider
+         const ai = new GoogleGenAI({ apiKey: aiConfig.apiKey });
+         const response = await ai.models.generateContent({
+            model: aiConfig.modelId || 'gemini-3-flash-preview',
+            contents: [
+              { role: 'user', parts: [{ text: systemPrompt }, { text: `User App Description: ${prompt}` }] }
+            ],
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: appSchema,
+              temperature: 0.2,
+              // Only enable search for Gemini 3.0 models as per docs recommendation or if supported
+              tools: aiConfig.modelId.includes('gemini-3') ? [{ googleSearch: {} }] : undefined
+            }
+          });
+
+          const text = response.text;
+          if (!text) throw new Error("No response from AI");
+          return JSON.parse(text) as GeneratedApp;
       }
-    });
 
-    const text = response.text;
-    if (!text) throw new Error("No response from AI");
-
-    const data = JSON.parse(text) as GeneratedApp;
-    return data;
-  } catch (error) {
-    console.error("Gemini Generation Error:", error);
-    throw error;
+    } catch (error: any) {
+      console.error(`Generation Attempt ${attempt} Failed:`, error);
+      lastError = error;
+      
+      const isQuota = error.status === 429 || error.message?.includes('429') || error.message?.toLowerCase().includes('quota');
+      const isServer = error.status === 503 || error.message?.includes('503');
+      
+      if (isQuota || isServer) {
+         if (attempt < 3) {
+            await delay(2000 * attempt);
+            continue;
+         } else {
+            throw new Error(`AI Model Error: ${error.message}. Please check your quota or settings.`);
+         }
+      }
+      throw error;
+    }
   }
+  
+  throw lastError;
 };
 
-export const refineApp = async (apiKey: string, currentProject: Project, userMessage: string, framework: Framework): Promise<GeneratedApp> => {
+export const refineApp = async (aiConfig: AIModelConfig, currentProject: Project, userMessage: string, framework: Framework): Promise<GeneratedApp> => {
    let backendConfig: any = undefined;
    if (currentProject.backendType === 'genbase' && currentProject.genBaseConfig) {
      backendConfig = { type: 'genbase', config: currentProject.genBaseConfig };
    }
    
-   // Construct a context string containing all current files
    const fileContext = currentProject.files.map(f => 
       `### FILE: ${f.name} ###\n${f.content}\n### END FILE ${f.name} ###`
    ).join('\n\n');
@@ -172,6 +247,5 @@ export const refineApp = async (apiKey: string, currentProject: Project, userMes
      ${backendConfig ? `- MAINTAIN ${backendConfig.type.toUpperCase()} CONNECTION.` : ''}
    `;
    
-   // Pass the project's framework to maintain consistency
-   return generateApp(apiKey, prompt, Framework.HTML, backendConfig);
+   return generateApp(aiConfig, prompt, Framework.HTML, backendConfig);
 }

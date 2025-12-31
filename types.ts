@@ -47,3 +47,10 @@ export interface Project {
 }
 
 export type ViewMode = 'code' | 'preview' | 'database';
+
+export interface AIModelConfig {
+  provider: 'gemini' | 'custom';
+  modelId: string;
+  apiKey: string;
+  baseUrl?: string; // For custom provider
+}

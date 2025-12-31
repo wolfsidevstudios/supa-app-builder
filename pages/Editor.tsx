@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Project, File, ViewMode } from '../types';
+import { Project, File, ViewMode, AIModelConfig } from '../types';
 import { CodeViewer } from '../components/CodeViewer';
 import { DatabaseViewer } from '../components/DatabaseViewer';
 import { Button } from '../components/Button';
@@ -21,16 +21,17 @@ import {
   Check,
   Rocket,
   GitCommit,
-  Github
+  Github,
+  Zap,
+  Cpu
 } from 'lucide-react';
 
 interface EditorProps {
   project: Project;
   onUpdateProject: (project: Project) => void;
-  apiKey: string;
+  aiConfig: AIModelConfig;
 }
 
-// --- Helper Component for Rendering Chat Messages ---
 const ChatMessageContent: React.FC<{ content: string }> = ({ content }) => {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
@@ -40,14 +41,12 @@ const ChatMessageContent: React.FC<{ content: string }> = ({ content }) => {
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
-  // Split content by code blocks
   const parts = content.split(/(```[\s\S]*?```)/g);
 
   return (
     <div className="space-y-3">
       {parts.map((part, index) => {
         if (part.startsWith('```') && part.endsWith('```')) {
-          // Extract language and code
           const match = part.match(/```(\w*)\n([\s\S]*?)```/);
           const language = match ? match[1] : 'text';
           const code = match ? match[2] : part.slice(3, -3);
@@ -80,7 +79,6 @@ const ChatMessageContent: React.FC<{ content: string }> = ({ content }) => {
             </div>
           );
         } else {
-          // Render regular text with bold formatting support
           const textParts = part.split(/(\*\*.*?\*\*)/g);
           return (
             <p key={index} className="leading-relaxed whitespace-pre-wrap">
@@ -98,7 +96,7 @@ const ChatMessageContent: React.FC<{ content: string }> = ({ content }) => {
   );
 };
 
-export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey }) => {
+export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, aiConfig }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(project.files.length > 0 ? project.files[0] : null);
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const [chatInput, setChatInput] = useState('');
@@ -109,7 +107,6 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
   const [isPushing, setIsPushing] = useState(false);
   const [pushSuccess, setPushSuccess] = useState(false);
 
-  // Ensure selected file is valid if project updates
   useEffect(() => {
     if (!project.files.find(f => f.name === selectedFile?.name)) {
         if (project.files.length > 0) setSelectedFile(project.files[0]);
@@ -131,7 +128,7 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
     onUpdateProject({ ...project, messages: updatedMessages });
 
     try {
-        const refinedData = await refineApp(apiKey, project, userMsg, project.framework);
+        const refinedData = await refineApp(aiConfig, project, userMsg, project.framework);
         
         const assistantMsg = {
             id: Math.random().toString(),
@@ -219,9 +216,15 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
       
       {/* Chat Panel */}
       <div className="w-[400px] md:w-[450px] border-r border-border bg-surface flex flex-col flex-none z-10 shadow-xl">
-        <div className="p-4 border-b border-border font-semibold text-sm tracking-wide text-zinc-200 flex items-center gap-2 bg-surface">
-            <MessageSquare className="h-4 w-4 text-primary" />
-            AI ASSISTANT
+        <div className="p-4 border-b border-border font-semibold text-sm tracking-wide text-zinc-200 flex items-center justify-between bg-surface">
+            <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-primary" />
+                <span>AI ASSISTANT</span>
+            </div>
+            <span className="text-[10px] flex items-center gap-1 text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full border border-blue-400/20 truncate max-w-[120px]">
+                {aiConfig.provider === 'custom' ? <Cpu className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+                <span className="truncate">{aiConfig.modelId}</span>
+            </span>
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -275,9 +278,8 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Toolbar */}
         <div className="h-14 border-b border-border bg-surface/50 backdrop-blur flex items-center justify-between px-4">
             <div className="flex items-center gap-2">
                  <button 
@@ -353,14 +355,11 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
             </div>
         </div>
 
-        {/* Workspace */}
         <div className="flex-1 flex overflow-hidden">
-             {/* Main Preview/Code View */}
             <div className="flex-1 relative bg-black/20">
                {renderContent()}
             </div>
 
-            {/* File Explorer Sidebar - now on the Right or collapsed */}
             {isSidebarOpen && (
                 <div className="w-60 border-l border-border bg-surface flex flex-col flex-none transition-all">
                 <div className="p-3 border-b border-border flex items-center justify-between bg-surface">

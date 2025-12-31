@@ -1,19 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
-import { Framework, Project } from '../types';
+import { Framework, Project, AIModelConfig } from '../types';
 import { Button } from '../components/Button';
 import { ContextModal } from '../components/ContextModal';
-import { Sparkles, Settings, AtSign, FileText } from 'lucide-react';
+import { Sparkles, Settings, AtSign, FileText, Zap, Cpu } from 'lucide-react';
 import { generateApp } from '../services/geminiService';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 interface DashboardProps {
   onProjectCreated: (project: Project) => void;
-  apiKey: string;
+  aiConfig: AIModelConfig;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, aiConfig }) => {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>('');
@@ -25,21 +25,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
 
   // Framework is always HTML now
   const framework = Framework.HTML;
-  // Backend is always GenBase
   const backendType = 'genbase';
 
   // Handle OAuth tokens on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    
-    // Supabase Token
-    const sbToken = params.get('supabase_access_token');
-    if (sbToken) {
-       // Just clean URL for now, Supabase removed from this version of Dashboard
-       window.history.replaceState({}, document.title, "/");
-    }
-
-    // Netlify Token
     const netlifyToken = params.get('netlify_access_token');
     if (netlifyToken) {
       localStorage.setItem('netlify_access_token', netlifyToken);
@@ -49,8 +39,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
-    if (!apiKey) {
-      setError("Gemini API Key is missing. Please add it in Settings.");
+    if (!aiConfig.apiKey) {
+      setError("AI API Key is missing. Please add it in Settings.");
       return;
     }
     
@@ -58,7 +48,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
     setError(null);
     
     try {
-      // Merge User Prompt with Context
       let fullPrompt = prompt;
       if (additionalContext.trim()) {
           fullPrompt += `\n\nADDITIONAL CONTEXT/DOCUMENTATION:\n${additionalContext}`;
@@ -66,9 +55,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
 
       let backendConfig: any = undefined;
 
-      // 1. Setup Backend Configuration (GenBase)
       setGenerationStep('Provisioning GenBase database...');
-      // Call our API to provision a new project ID
       try {
         const res = await fetch('/api/provision', { method: 'POST' });
         if (!res.ok) {
@@ -83,13 +70,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
         backendConfig = { type: 'genbase', config: { projectId: `proj_${generateId()}` } };
       }
 
-      // 2. Generate App Code
       setGenerationStep('Generating application...');
-      const generatedData = await generateApp(apiKey, fullPrompt, framework, backendConfig);
+      const generatedData = await generateApp(aiConfig, fullPrompt, framework, backendConfig);
       
       let assistantMessage = generatedData.explanation || "I've generated the initial version of your app.";
 
-      // 3. Apply Schema (GenBase)
       if (backendConfig?.config?.projectId) {
          const schemaFile = generatedData.files.find(f => f.name === 'db/schema.sql' || f.name === 'schema.sql');
          if (schemaFile) {
@@ -168,14 +153,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
 
         <div className="bg-surface/50 border border-border rounded-2xl p-2 backdrop-blur-sm shadow-2xl relative">
           
-          {!apiKey && (
+          {!aiConfig.apiKey && (
              <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-sm rounded-2xl flex items-center justify-center">
                 <div className="bg-surface border border-border p-6 rounded-xl shadow-2xl max-w-md text-center space-y-4">
                     <div className="mx-auto w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
                         <Settings className="h-6 w-6 text-yellow-500" />
                     </div>
                     <h3 className="text-xl font-semibold text-white">API Key Required</h3>
-                    <p className="text-zinc-400 text-sm">To start building apps, you need to provide your Gemini API Key.</p>
+                    <p className="text-zinc-400 text-sm">To start building apps, you need to provide your AI API Key.</p>
                 </div>
              </div>
           )}
@@ -184,12 +169,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
             <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                disabled={!apiKey}
+                disabled={!aiConfig.apiKey}
                 placeholder="e.g., A minimalist task manager with drag-and-drop, dark mode, and categories..."
                 className="w-full bg-transparent text-lg p-6 pb-12 text-white placeholder:text-zinc-600 focus:outline-none resize-none min-h-[140px]"
             />
             
-            {/* Floating Context Button */}
             <div className="absolute bottom-3 left-4">
                 <button
                     onClick={() => setIsContextModalOpen(true)}
@@ -198,7 +182,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
                         ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30' 
                         : 'bg-white/5 text-zinc-400 border border-white/5 hover:bg-white/10 hover:text-zinc-200'
                     }`}
-                    title="Add docs or extra context"
                 >
                     {additionalContext.trim() ? <FileText className="h-3.5 w-3.5" /> : <AtSign className="h-3.5 w-3.5" />}
                     {additionalContext.trim() ? 'Context Added' : 'Context'}
@@ -208,12 +191,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
           
           <div className="px-6 pb-4 pt-2 border-t border-white/5">
              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                <div className="text-xs text-zinc-500">
-                   Stack: HTML, Tailwind, GenBase (Postgres)
+                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                   <span>Stack: HTML, Tailwind, GenBase</span>
+                   <span className="w-1 h-1 bg-zinc-700 rounded-full" />
+                   <span className="flex items-center gap-1 text-blue-400">
+                      {aiConfig.provider === 'custom' ? <Cpu className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+                      {aiConfig.modelId || 'Gemini 3.0 Flash'}
+                   </span>
                 </div>
                 <Button 
                     onClick={handleGenerate} 
-                    disabled={!prompt.trim() || isGenerating || !apiKey}
+                    disabled={!prompt.trim() || isGenerating || !aiConfig.apiKey}
                     isLoading={isGenerating}
                     className="w-full md:w-auto px-8 py-2.5 rounded-xl text-base"
                 >

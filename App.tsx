@@ -6,7 +6,7 @@ import { Editor } from './pages/Editor';
 import { Projects } from './pages/Projects';
 import { GitHubImportModal } from './components/GitHubImportModal';
 import { SettingsModal } from './components/SettingsModal';
-import { Project } from './types';
+import { Project, AIModelConfig } from './types';
 
 type ViewState = 'dashboard' | 'projects' | 'editor';
 
@@ -28,30 +28,42 @@ function App() {
 
   // Determine initial view based on if projects exist
   const [view, setView] = useState<ViewState>(() => {
-     // If we have a project loaded in state (rare on refresh unless persisted separately), use editor
-     // Otherwise default to projects list if projects exist, else dashboard
      const saved = localStorage.getItem('supa_projects');
      const hasProjects = saved ? JSON.parse(saved).length > 0 : false;
      return hasProjects ? 'projects' : 'dashboard';
   });
 
-  // Initialize API Key
-  const [apiKey, setApiKey] = useState(() => {
-    return localStorage.getItem('gemini_api_key') || process.env.API_KEY || '';
+  // Initialize AI Config
+  const [aiConfig, setAiConfig] = useState<AIModelConfig>(() => {
+    const savedConfig = localStorage.getItem('supa_ai_config');
+    if (savedConfig) {
+        return JSON.parse(savedConfig);
+    }
+    // Fallback: Check for old simple API key
+    const oldKey = localStorage.getItem('gemini_api_key') || process.env.API_KEY || '';
+    return {
+        provider: 'gemini',
+        modelId: 'gemini-3-flash-preview',
+        apiKey: oldKey
+    };
   });
 
-  // Persist projects whenever they change
+  // Persist projects
   useEffect(() => {
     try {
       localStorage.setItem('supa_projects', JSON.stringify(projects));
     } catch (e) {
-      console.error("Failed to save projects to localStorage (Quota exceeded?)", e);
+      console.error("Failed to save projects to localStorage", e);
     }
   }, [projects]);
 
-  const handleSaveApiKey = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem('gemini_api_key', key);
+  const handleSaveConfig = (config: AIModelConfig) => {
+    setAiConfig(config);
+    localStorage.setItem('supa_ai_config', JSON.stringify(config));
+    // Also update legacy key for backward compat if it's gemini
+    if (config.provider === 'gemini') {
+        localStorage.setItem('gemini_api_key', config.apiKey);
+    }
   };
 
   const handleProjectCreated = (project: Project) => {
@@ -95,7 +107,7 @@ function App() {
         <Editor 
           project={currentProject} 
           onUpdateProject={handleProjectUpdate} 
-          apiKey={apiKey}
+          aiConfig={aiConfig}
         />
       );
     }
@@ -111,11 +123,10 @@ function App() {
       );
     }
 
-    // Default to Dashboard
     return (
       <Dashboard 
         onProjectCreated={handleProjectCreated} 
-        apiKey={apiKey}
+        aiConfig={aiConfig}
       />
     );
   };
@@ -143,8 +154,8 @@ function App() {
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
-        apiKey={apiKey}
-        onSave={handleSaveApiKey}
+        config={aiConfig}
+        onSave={handleSaveConfig}
       />
     </>
   );
