@@ -1,54 +1,17 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { File } from '../types';
+
+import React, { useState, useEffect } from 'react';
 import { Database, AlertCircle, RefreshCw, Server, Table, Loader2 } from 'lucide-react';
 
 interface DatabaseViewerProps {
-  files: File[];
-  projectId?: string; // Optional: Only available for GenBase
+  projectId?: string; 
 }
 
-export const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ files, projectId }) => {
-  // --- GenBase State ---
+export const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ projectId }) => {
   const [tables, setTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableData, setTableData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // --- Mock Data Logic (Legacy) ---
-  const mockDataInfo = useMemo(() => {
-    if (projectId) return null; // Skip if in GenBase mode
-
-    const dataFile = files.find(f => 
-      f.name === 'data/initialData.ts' || 
-      f.name === 'data/initialData.js' || 
-      ((f.name.includes('data/') || f.name.includes('mock')) && 
-      (f.name.endsWith('.ts') || f.name.endsWith('.js') || f.name.endsWith('.json')))
-    );
-
-    if (!dataFile) return { error: "No mock data file found (e.g., data/initialData.ts)" };
-
-    try {
-      const content = dataFile.content;
-      const arrayMatch = content.match(/\[([\s\S]*?)\]/);
-      
-      if (!arrayMatch) return { error: "Could not identify an array structure in the data file." };
-
-      const rawArrayString = `[${arrayMatch[1]}]`;
-      // eslint-disable-next-line no-new-func
-      const parsedData = new Function(`return ${rawArrayString}`)();
-
-      if (!Array.isArray(parsedData) || parsedData.length === 0) {
-        return { error: "Data file contains an empty array or invalid format." };
-      }
-
-      return { data: parsedData, fileName: dataFile.name };
-    } catch (e: any) {
-      return { error: `Failed to parse data: ${e.message}` };
-    }
-  }, [files, projectId]);
-
-  // --- GenBase Logic ---
 
   const executeQuery = async (sql: string) => {
     if (!projectId) return;
@@ -73,7 +36,6 @@ export const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ files, projectId
     setIsLoading(true);
     setError(null);
     try {
-      // Query to find tables in the current user's schema (search_path is set by API)
       const res = await executeQuery(`
         SELECT table_name 
         FROM information_schema.tables 
@@ -108,38 +70,26 @@ export const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ files, projectId
     }
   };
 
-  // Initial Load for GenBase
   useEffect(() => {
     if (projectId) {
       fetchTables();
     }
   }, [projectId]);
 
-  // Fetch data when table selection changes
   useEffect(() => {
     if (projectId && selectedTable) {
       fetchTableData(selectedTable);
     }
   }, [projectId, selectedTable]);
 
-  // --- Render MOCK View ---
   if (!projectId) {
-    if (mockDataInfo?.error) {
       return (
-        <div className="h-full w-full flex flex-col items-center justify-center text-zinc-500 bg-[#09090b] gap-4">
-          <div className="p-4 bg-surface rounded-full">
-             <AlertCircle className="h-8 w-8 text-red-400" />
+          <div className="h-full w-full flex items-center justify-center text-zinc-500 bg-[#09090b]">
+              No Database Connected
           </div>
-          <p className="max-w-md text-center">{mockDataInfo.error}</p>
-          <p className="text-xs text-zinc-600">Ensure your app has a 'data/initialData.ts' file with an exported array.</p>
-        </div>
-      );
-    }
-    const { data, fileName } = mockDataInfo!;
-    return <TableView data={data} title={`Mock Data (${fileName})`} type="mock" />;
+      )
   }
 
-  // --- Render GENBASE View ---
   return (
     <div className="h-full w-full flex bg-[#09090b]">
       {/* Sidebar for Tables */}
@@ -197,7 +147,6 @@ export const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ files, projectId
           <TableView 
             data={tableData} 
             title={selectedTable || 'Select a table'} 
-            type="genbase" 
             onRefresh={() => selectedTable && fetchTableData(selectedTable)}
             isLoading={isLoading}
           />
@@ -207,14 +156,12 @@ export const DatabaseViewer: React.FC<DatabaseViewerProps> = ({ files, projectId
   );
 };
 
-// --- Shared Table Component ---
 const TableView: React.FC<{ 
   data: any[], 
   title: string, 
-  type: 'mock' | 'genbase', 
   onRefresh?: () => void,
   isLoading?: boolean
-}> = ({ data, title, type, onRefresh, isLoading }) => {
+}> = ({ data, title, onRefresh, isLoading }) => {
   
   const headers = data && data.length > 0 ? Object.keys(data[0]) : [];
 
@@ -223,7 +170,7 @@ const TableView: React.FC<{
       {/* Header */}
       <div className="flex-none px-6 py-3 border-b border-border bg-surface/30 backdrop-blur flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {type === 'mock' ? <Database className="h-4 w-4 text-orange-400" /> : <Table className="h-4 w-4 text-blue-400" />}
+          <Table className="h-4 w-4 text-blue-400" />
           <span className="text-sm font-semibold text-zinc-200">{title}</span>
         </div>
         <div className="flex items-center gap-3">

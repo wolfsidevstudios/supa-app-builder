@@ -3,12 +3,7 @@ export enum Framework {
   HTML = 'HTML'
 }
 
-export type BackendType = 'mock' | 'supabase' | 'genbase';
-
-export interface SupabaseConfig {
-  url: string;
-  key: string;
-}
+export type BackendType = 'genbase';
 
 export interface GenBaseConfig {
   projectId: string;
@@ -44,8 +39,8 @@ export interface Project {
   previewHtml?: string;
   messages: Message[];
   backendType: BackendType;
-  supabaseConfig?: SupabaseConfig;
   genBaseConfig?: GenBaseConfig;
+  netlifySiteId?: string;
 }
 
 export type ViewMode = 'code' | 'preview' | 'database';

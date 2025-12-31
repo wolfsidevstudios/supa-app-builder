@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Project, File, ViewMode, Framework } from '../types';
+
+import React, { useState, useEffect } from 'react';
+import { Project, File, ViewMode } from '../types';
 import { CodeViewer } from '../components/CodeViewer';
 import { DatabaseViewer } from '../components/DatabaseViewer';
 import { Button } from '../components/Button';
+import { DeployModal } from '../components/DeployModal';
 import { refineApp } from '../services/geminiService';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -11,16 +13,13 @@ import {
   Code, 
   MessageSquare, 
   FolderOpen, 
-  ChevronRight, 
-  ChevronDown,
   FileCode,
   Send,
   Download,
-  Maximize2,
   Database,
   Copy,
   Check,
-  Server
+  Rocket
 } from 'lucide-react';
 
 interface EditorProps {
@@ -80,7 +79,6 @@ const ChatMessageContent: React.FC<{ content: string }> = ({ content }) => {
           );
         } else {
           // Render regular text with bold formatting support
-          // This matches **text** and renders it bold
           const textParts = part.split(/(\*\*.*?\*\*)/g);
           return (
             <p key={index} className="leading-relaxed whitespace-pre-wrap">
@@ -104,6 +102,7 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
   const [chatInput, setChatInput] = useState('');
   const [isRefining, setIsRefining] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
 
   // Ensure selected file is valid if project updates
   useEffect(() => {
@@ -111,37 +110,6 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
         if (project.files.length > 0) setSelectedFile(project.files[0]);
     }
   }, [project.files, selectedFile]);
-
-  // Listen for Live Data Updates from the Preview Iframe
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'DB_UPDATE' && Array.isArray(event.data.data)) {
-        const newData = event.data.data;
-        const dataFileIndex = project.files.findIndex(f => 
-            f.name === 'data/initialData.ts' || 
-            f.name === 'data/initialData.js' || 
-            ((f.name.includes('data/') || f.name.includes('mock')) && 
-            (f.name.endsWith('.ts') || f.name.endsWith('.js')))
-        );
-
-        if (dataFileIndex !== -1) {
-            const dataFile = project.files[dataFileIndex];
-            const updatedContent = dataFile.content.replace(
-                /\[([\s\S]*?)\]/, 
-                JSON.stringify(newData, null, 2)
-            );
-
-            if (updatedContent !== dataFile.content) {
-                const newFiles = [...project.files];
-                newFiles[dataFileIndex] = { ...dataFile, content: updatedContent };
-                onUpdateProject({ ...project, files: newFiles });
-            }
-        }
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [project, onUpdateProject]);
 
   const handleSendMessage = async () => {
     if (!chatInput.trim() || isRefining) return;
@@ -172,9 +140,9 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
             files: refinedData.files,
             previewHtml: refinedData.previewHtml,
             messages: [...updatedMessages, assistantMsg],
-            supabaseConfig: project.supabaseConfig,
             genBaseConfig: project.genBaseConfig,
-            backendType: project.backendType
+            backendType: project.backendType,
+            netlifySiteId: project.netlifySiteId // preserve site id
         };
 
         onUpdateProject(updatedProject);
@@ -204,32 +172,14 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
           case 'code':
               return <CodeViewer file={selectedFile} />;
           case 'database':
-              if (project.backendType === 'supabase' && project.supabaseConfig) {
-                  return (
-                      <div className="h-full w-full flex flex-col items-center justify-center text-zinc-500 bg-[#09090b] gap-4">
-                        <div className="p-4 bg-emerald-500/10 rounded-full">
-                           <Database className="h-8 w-8 text-emerald-400" />
-                        </div>
-                        <h3 className="text-xl font-medium text-white">Supabase Connected</h3>
-                        <p className="max-w-md text-center text-sm text-zinc-400">
-                            Your app is connected to a live Supabase database. 
-                            <br/>
-                            Data operations are happening directly in the preview.
-                        </p>
-                        <div className="flex flex-col gap-2 w-full max-w-sm">
-                             <div className="bg-surface border border-border p-3 rounded-lg flex items-center justify-between">
-                                 <span className="text-xs text-zinc-500">URL</span>
-                                 <span className="text-xs text-zinc-300 font-mono truncate max-w-[200px]">{project.supabaseConfig.url}</span>
-                             </div>
-                        </div>
-                        <p className="text-xs text-zinc-600 mt-4">Check the 'db/schema.sql' file for table definitions.</p>
-                      </div>
-                  );
-              }
               if (project.backendType === 'genbase' && project.genBaseConfig) {
-                  return <DatabaseViewer files={project.files} projectId={project.genBaseConfig.projectId} />;
+                  return <DatabaseViewer projectId={project.genBaseConfig.projectId} />;
               }
-              return <DatabaseViewer files={project.files} />;
+              return (
+                  <div className="h-full w-full flex items-center justify-center text-zinc-500 bg-[#09090b]">
+                      No database configured.
+                  </div>
+              );
           default:
               return null;
       }
@@ -282,7 +232,7 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
                             handleSendMessage();
                         }
                     }}
-                    placeholder="Describe changes or ask for SQL..."
+                    placeholder="Describe changes or ask for Edge Functions..."
                     className="w-full bg-black/20 border border-white/10 rounded-xl pl-4 pr-12 py-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none h-[120px] placeholder:text-zinc-600"
                 />
                 <button 
@@ -335,23 +285,29 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
                     }`}
                     >
                     <Database className="h-3 w-3" />
-                    {project.backendType === 'genbase' ? 'GenBase' : project.backendType === 'supabase' ? 'Supabase' : 'Data'}
+                    GenBase
                     </button>
                 </div>
             </div>
             
-            <div className="flex items-center gap-2">
-                 {(project.supabaseConfig || project.genBaseConfig) && (
+            <div className="flex items-center gap-3">
+                 {project.genBaseConfig && (
                     <span className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
                         <span className="relative flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        Connected
+                        DB Active
                     </span>
                  )}
-                 <span className="text-xs text-zinc-500 hidden md:block">{project.framework} Project</span>
-                 <Button variant="secondary" className="h-8 text-xs" icon={<Download className="h-3 w-3"/>}>Export</Button>
+                 <Button 
+                    onClick={() => setIsDeployModalOpen(true)}
+                    variant="secondary" 
+                    className="h-8 text-xs bg-[#00C7B7]/10 hover:bg-[#00C7B7]/20 text-[#00C7B7] border-[#00C7B7]/20"
+                    icon={<Rocket className="h-3 w-3"/>}
+                 >
+                    Deploy to Netlify
+                 </Button>
             </div>
         </div>
 
@@ -390,6 +346,13 @@ export const Editor: React.FC<EditorProps> = ({ project, onUpdateProject, apiKey
             )}
         </div>
       </div>
+
+      <DeployModal 
+         isOpen={isDeployModalOpen}
+         onClose={() => setIsDeployModalOpen(false)}
+         project={project}
+         onUpdateProject={onUpdateProject}
+      />
     </div>
   );
 };

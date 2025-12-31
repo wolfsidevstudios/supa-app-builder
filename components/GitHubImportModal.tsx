@@ -46,7 +46,7 @@ export const GitHubImportModal: React.FC<GitHubImportModalProps> = ({ isOpen, on
         framework: framework,
         createdAt: Date.now(),
         files: files,
-        backendType: 'mock',
+        backendType: 'genbase',
         messages: [{
             id: 'init',
             role: 'system',
