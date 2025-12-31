@@ -17,18 +17,18 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNewProject, onGoHome
       <aside className="w-16 border-r border-border flex flex-col justify-between bg-surface/50 backdrop-blur-xl flex-none">
         <div>
           <div className="h-16 flex items-center justify-center border-b border-border cursor-pointer hover:bg-white/5 transition-colors" onClick={onGoHome} title="Home">
-            <div className="h-8 w-8 bg-gradient-to-tr from-primary to-purple-500 rounded-lg flex items-center justify-center shadow-lg shadow-primary/20">
-              <Code2 className="h-5 w-5 text-white" />
+            <div className="h-8 w-8 bg-gradient-to-tr from-white to-blue-200 rounded-lg flex items-center justify-center shadow-lg shadow-blue-400/20">
+              <Code2 className="h-5 w-5 text-blue-600" />
             </div>
           </div>
           
           <nav className="p-3 space-y-4 mt-4">
              <button 
                 onClick={onNewProject}
-                className="w-full flex items-center justify-center p-3 rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all group"
+                className="w-full aspect-square flex items-center justify-center rounded-2xl bg-white text-black hover:bg-zinc-200 transition-all group shadow-md shadow-white/5"
                 title="New Project"
              >
-                <Plus className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                <Plus className="h-7 w-7 group-hover:scale-110 transition-transform" strokeWidth={3} />
              </button>
 
              <button 

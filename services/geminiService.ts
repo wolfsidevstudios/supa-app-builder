@@ -40,19 +40,23 @@ export const generateApp = async (
   }
   
   const ai = new GoogleGenAI({ apiKey });
+  // Using a model capable of tools and high reasoning
   const modelName = 'gemini-3-flash-preview'; 
+
+  // Get the current origin to ensure deployed apps can still hit the main GenBase API
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://supa-app-builder.vercel.app';
 
   const backendInstructions = `
     2. **BACKEND (GenBase / Managed Postgres)**:
        - This app uses a proxy API to talk to a Postgres database.
        - **PROJECT ID**: "${backendConfig?.config.projectId || 'demo'}"
-       - **API ENDPOINT**: "/api/query"
+       - **API ENDPOINT**: "${origin}/api/query"
        - Create 'db/schema.sql' with the tables needed.
        - Create 'src/services/db.js':
          - Implement a helper function \`executeQuery(sql)\` that does:
            \`\`\`javascript
            export async function executeQuery(sql) {
-             const res = await fetch('/api/query', {
+             const res = await fetch('${origin}/api/query', {
                method: 'POST',
                headers: { 'Content-Type': 'application/json' },
                body: JSON.stringify({ projectId: '${backendConfig?.config.projectId || 'demo'}', sql })
@@ -88,6 +92,7 @@ export const generateApp = async (
       **FILES OUTPUT**:
       - index.html, script.js, style.css.
       - db/schema.sql (if tables are needed).
+      - src/services/db.js (database connection).
       - api/<route>.js (if Node.js backend is needed).
       - package.json (if Node.js dependencies are needed).
       
@@ -125,6 +130,8 @@ export const generateApp = async (
         responseMimeType: "application/json",
         responseSchema: appSchema,
         temperature: 0.2,
+        // Enable Google Search for grounding to get real-time info if requested
+        tools: [{ googleSearch: {} }]
       }
     });
 

@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Framework, Project } from '../types';
 import { Button } from '../components/Button';
-import { Sparkles, Settings } from 'lucide-react';
+import { ContextModal } from '../components/ContextModal';
+import { Sparkles, Settings, AtSign, FileText } from 'lucide-react';
 import { generateApp } from '../services/geminiService';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -18,6 +19,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
   const [generationStep, setGenerationStep] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   
+  // Context Management
+  const [isContextModalOpen, setIsContextModalOpen] = useState(false);
+  const [additionalContext, setAdditionalContext] = useState('');
+
   // Framework is always HTML now
   const framework = Framework.HTML;
   // Backend is always GenBase
@@ -53,6 +58,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
     setError(null);
     
     try {
+      // Merge User Prompt with Context
+      let fullPrompt = prompt;
+      if (additionalContext.trim()) {
+          fullPrompt += `\n\nADDITIONAL CONTEXT/DOCUMENTATION:\n${additionalContext}`;
+      }
+
       let backendConfig: any = undefined;
 
       // 1. Setup Backend Configuration (GenBase)
@@ -74,7 +85,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
 
       // 2. Generate App Code
       setGenerationStep('Generating application...');
-      const generatedData = await generateApp(apiKey, prompt, framework, backendConfig);
+      const generatedData = await generateApp(apiKey, fullPrompt, framework, backendConfig);
       
       let assistantMessage = generatedData.explanation || "I've generated the initial version of your app.";
 
@@ -118,7 +129,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
             {
                 id: generateId(),
                 role: 'user',
-                content: prompt,
+                content: fullPrompt,
                 timestamp: Date.now()
             },
             {
@@ -169,16 +180,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
              </div>
           )}
 
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            disabled={!apiKey}
-            placeholder="e.g., A minimalist task manager with drag-and-drop, dark mode, and categories..."
-            className="w-full bg-transparent text-lg p-6 text-white placeholder:text-zinc-600 focus:outline-none resize-none min-h-[120px]"
-          />
+          <div className="relative">
+            <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                disabled={!apiKey}
+                placeholder="e.g., A minimalist task manager with drag-and-drop, dark mode, and categories..."
+                className="w-full bg-transparent text-lg p-6 pb-12 text-white placeholder:text-zinc-600 focus:outline-none resize-none min-h-[140px]"
+            />
+            
+            {/* Floating Context Button */}
+            <div className="absolute bottom-3 left-4">
+                <button
+                    onClick={() => setIsContextModalOpen(true)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                        additionalContext.trim() 
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30' 
+                        : 'bg-white/5 text-zinc-400 border border-white/5 hover:bg-white/10 hover:text-zinc-200'
+                    }`}
+                    title="Add docs or extra context"
+                >
+                    {additionalContext.trim() ? <FileText className="h-3.5 w-3.5" /> : <AtSign className="h-3.5 w-3.5" />}
+                    {additionalContext.trim() ? 'Context Added' : 'Context'}
+                </button>
+            </div>
+          </div>
           
-          <div className="px-6 pb-4">
-             <div className="flex flex-col md:flex-row gap-4 items-center justify-between pt-2">
+          <div className="px-6 pb-4 pt-2 border-t border-white/5">
+             <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                 <div className="text-xs text-zinc-500">
                    Stack: HTML, Tailwind, GenBase (Postgres)
                 </div>
@@ -199,8 +228,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
                 {error}
             </div>
         )}
-
       </div>
+
+      <ContextModal 
+        isOpen={isContextModalOpen}
+        onClose={() => setIsContextModalOpen(false)}
+        onSave={setAdditionalContext}
+        currentContext={additionalContext}
+      />
     </div>
   );
 };
