@@ -15,7 +15,8 @@
     "lucide-react": "^0.562.0",
     "uuid": "^13.0.0",
     "react-syntax-highlighter": "^16.1.0",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "buffer": "^6.0.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
