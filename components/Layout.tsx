@@ -6,9 +6,10 @@ interface LayoutProps {
   onNewProject: () => void;
   onGoHome: () => void;
   onImportGithub: () => void;
+  onOpenSettings: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, onNewProject, onGoHome, onImportGithub }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, onNewProject, onGoHome, onImportGithub, onOpenSettings }) => {
   return (
     <div className="flex h-screen w-full bg-background text-zinc-100 overflow-hidden font-sans">
       {/* Sidebar */}
@@ -40,6 +41,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNewProject, onGoHome
                 <Github className="h-5 w-5" />
             </button>
             <button 
+              onClick={onOpenSettings}
               className="w-full flex items-center justify-center p-3 rounded-lg text-secondary hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
               title="Settings"
             >
