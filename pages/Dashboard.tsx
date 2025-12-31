@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Framework, Project, BackendType } from '../types';
 import { Button } from '../components/Button';
-import { Sparkles, Code, Database, Server, HardDrive, Settings } from 'lucide-react';
+import { Sparkles, Code, Database, Server, HardDrive, Settings, Link, Check, RefreshCw, LogOut } from 'lucide-react';
 import { generateApp } from '../services/geminiService';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -11,14 +11,113 @@ interface DashboardProps {
   apiKey: string;
 }
 
+interface SupabaseProject {
+  id: string;
+  name: string;
+  ref: string; // The project reference ID
+}
+
 export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }) => {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Backend State
   const [backendType, setBackendType] = useState<BackendType>('mock');
+  
+  // Manual Supabase State
   const [supabaseUrl, setSupabaseUrl] = useState('');
   const [supabaseKey, setSupabaseKey] = useState('');
+
+  // OAuth Supabase State
+  const [supabaseAccessToken, setSupabaseAccessToken] = useState<string | null>(null);
+  const [supabaseProjects, setSupabaseProjects] = useState<SupabaseProject[]>([]);
+  const [selectedProjectRef, setSelectedProjectRef] = useState<string>('');
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [useManualSupabase, setUseManualSupabase] = useState(false);
+
+  // Check for Supabase OAuth Token in URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('supabase_access_token');
+    if (token) {
+      setSupabaseAccessToken(token);
+      setBackendType('supabase');
+      // Clean URL
+      window.history.replaceState({}, document.title, "/");
+    }
+  }, []);
+
+  // Fetch Supabase Projects when token is available
+  useEffect(() => {
+    if (supabaseAccessToken && backendType === 'supabase' && !useManualSupabase) {
+      fetchSupabaseProjects();
+    }
+  }, [supabaseAccessToken, backendType, useManualSupabase]);
+
+  // Auto-fetch keys when a project is selected
+  useEffect(() => {
+    if (selectedProjectRef && supabaseAccessToken) {
+      fetchProjectKeys(selectedProjectRef);
+    }
+  }, [selectedProjectRef]);
+
+  const fetchSupabaseProjects = async () => {
+    if (!supabaseAccessToken) return;
+    setIsLoadingProjects(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/supabase/proxy?endpoint=/v1/projects`, {
+        headers: { 'Authorization': `Bearer ${supabaseAccessToken}` }
+      });
+      if (!res.ok) throw new Error("Failed to fetch projects");
+      const data = await res.json();
+      setSupabaseProjects(data || []);
+      if (data && data.length > 0) {
+        setSelectedProjectRef(data[0].ref);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError("Could not load Supabase projects. You may need to reconnect.");
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  };
+
+  const fetchProjectKeys = async (ref: string) => {
+    try {
+      const res = await fetch(`/api/supabase/proxy?endpoint=/v1/projects/${ref}/api-keys`, {
+        headers: { 'Authorization': `Bearer ${supabaseAccessToken}` }
+      });
+      if (!res.ok) throw new Error("Failed to fetch API keys");
+      const data = await res.json();
+      
+      const anonKey = data.find((k: any) => k.name === 'anon')?.api_key;
+      // Construct URL (standard format for Supabase)
+      const url = `https://${ref}.supabase.co`;
+
+      if (anonKey) {
+        setSupabaseKey(anonKey);
+        setSupabaseUrl(url);
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Failed to fetch project keys.");
+    }
+  };
+
+  const handleConnectSupabase = () => {
+     // Redirect to our backend auth endpoint
+     window.location.href = '/api/auth/supabase/authorize';
+  };
+
+  const handleDisconnectSupabase = () => {
+    setSupabaseAccessToken(null);
+    setSupabaseProjects([]);
+    setSelectedProjectRef('');
+    setSupabaseUrl('');
+    setSupabaseKey('');
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -35,7 +134,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
 
       // 1. Setup Backend Configuration
       if (backendType === 'supabase') {
-         if (!supabaseUrl || !supabaseKey) throw new Error("Please provide Supabase credentials.");
+         if (!supabaseUrl || !supabaseKey) throw new Error("Missing Supabase credentials. Connect your account or enter details manually.");
          backendConfig = { type: 'supabase', config: { url: supabaseUrl, key: supabaseKey } };
       } else if (backendType === 'genbase') {
          // Call our API to provision a new project ID (and schema in real implementation)
@@ -164,27 +263,103 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
                         <Database className="h-4 w-4" />
                         <span className="font-medium text-sm">Supabase</span>
                     </div>
-                    <p className="text-xs opacity-70">Bring your own keys. Full control.</p>
+                    <p className="text-xs opacity-70">Connect account. Full control.</p>
                  </button>
              </div>
 
-             {/* Supabase Config Inputs */}
+             {/* Supabase Config UI */}
              {backendType === 'supabase' && (
-                <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-black/20 rounded-xl border border-white/5 animate-in fade-in slide-in-from-top-2">
-                    <input 
-                        type="text" 
-                        placeholder="Supabase Project URL"
-                        value={supabaseUrl}
-                        onChange={(e) => setSupabaseUrl(e.target.value)}
-                        className="bg-surface border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <input 
-                        type="password" 
-                        placeholder="Supabase Anon Key"
-                        value={supabaseKey}
-                        onChange={(e) => setSupabaseKey(e.target.value)}
-                        className="bg-surface border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                <div className="mb-4 bg-black/20 rounded-xl border border-white/5 animate-in fade-in slide-in-from-top-2 overflow-hidden">
+                    
+                    {!supabaseAccessToken && !useManualSupabase ? (
+                        <div className="p-8 flex flex-col items-center justify-center text-center space-y-4">
+                            <p className="text-zinc-300 text-sm max-w-sm">
+                                Connect your Supabase account to automatically configure your database connection and generate projects.
+                            </p>
+                            <Button onClick={handleConnectSupabase} className="bg-[#3ECF8E] hover:bg-[#34b27b] text-white border-none shadow-[#3ECF8E]/20">
+                                Connect Supabase
+                            </Button>
+                            <button 
+                                onClick={() => setUseManualSupabase(true)}
+                                className="text-xs text-zinc-500 hover:text-zinc-300 underline"
+                            >
+                                Or enter credentials manually
+                            </button>
+                        </div>
+                    ) : !useManualSupabase ? (
+                        <div className="p-4 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+                                    <Check className="h-4 w-4" /> Connected to Supabase
+                                </div>
+                                <button onClick={handleDisconnectSupabase} className="text-xs text-zinc-500 hover:text-red-400 flex items-center gap-1">
+                                    <LogOut className="h-3 w-3" /> Disconnect
+                                </button>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-xs text-zinc-400">Select Project</label>
+                                <div className="flex gap-2">
+                                    <select 
+                                        value={selectedProjectRef}
+                                        onChange={(e) => setSelectedProjectRef(e.target.value)}
+                                        className="flex-1 bg-surface border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#3ECF8E]"
+                                        disabled={isLoadingProjects || supabaseProjects.length === 0}
+                                    >
+                                        {isLoadingProjects ? (
+                                            <option>Loading projects...</option>
+                                        ) : supabaseProjects.length === 0 ? (
+                                            <option value="">No projects found</option>
+                                        ) : (
+                                            supabaseProjects.map(p => (
+                                                <option key={p.id} value={p.ref}>{p.name}</option>
+                                            ))
+                                        )}
+                                    </select>
+                                    <button 
+                                        onClick={fetchSupabaseProjects} 
+                                        className="p-2 bg-surface border border-white/10 rounded-lg hover:bg-white/5 text-zinc-400"
+                                        title="Refresh Projects"
+                                    >
+                                        <RefreshCw className={`h-4 w-4 ${isLoadingProjects ? 'animate-spin' : ''}`} />
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {supabaseUrl && (
+                                <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg flex items-center gap-2 text-xs text-emerald-400/80">
+                                    <Database className="h-3 w-3" />
+                                    Configured: {supabaseUrl}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="p-4 space-y-3">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs text-zinc-400 font-medium">Manual Configuration</span>
+                                <button 
+                                    onClick={() => setUseManualSupabase(false)}
+                                    className="text-xs text-[#3ECF8E] hover:underline"
+                                >
+                                    Use OAuth instead
+                                </button>
+                            </div>
+                            <input 
+                                type="text" 
+                                placeholder="Supabase Project URL"
+                                value={supabaseUrl}
+                                onChange={(e) => setSupabaseUrl(e.target.value)}
+                                className="w-full bg-surface border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#3ECF8E]"
+                            />
+                            <input 
+                                type="password" 
+                                placeholder="Supabase Anon Key"
+                                value={supabaseKey}
+                                onChange={(e) => setSupabaseKey(e.target.value)}
+                                className="w-full bg-surface border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#3ECF8E]"
+                            />
+                        </div>
+                    )}
                 </div>
              )}
 
@@ -198,7 +373,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onProjectCreated, apiKey }
 
                 <Button 
                     onClick={handleGenerate} 
-                    disabled={!prompt.trim() || isGenerating || !apiKey}
+                    disabled={!prompt.trim() || isGenerating || !apiKey || (backendType === 'supabase' && !supabaseUrl)}
                     isLoading={isGenerating}
                     className="w-full md:w-auto px-8 py-2.5 rounded-xl text-base"
                 >
